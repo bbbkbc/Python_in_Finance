@@ -1,0 +1,95 @@
+import quandl
+import pandas as pd
+from datetime import datetime
+from datetime import timedelta
+from sys import path
+import os
+
+root_dir = path[1]
+data_path = os.path.join(root_dir, "CSV_data/")
+with open(os.path.join(root_dir, "quandl_key.txt")) as f:
+    password = f.read()
+quandl.ApiConfig.api_key = password
+
+# list o symbols
+w20 = ['MBANK', 'SANPL', 'CCC', 'KGHM', 'LOTOS', 'LPP', 'CDPROJEKT', 'PEKAO', 'PGNIG',
+       'PKNORLEN', 'PKOBP', 'ORANGEPL', 'CYFRPLSAT', 'PGE', 'PZU', 'TAURONPE', 'JSW',
+       'ALIOR', 'DINOPL', 'PLAY']
+
+mw40 = ['AMICA', 'AMREST', 'ASSECOPOL', 'BUDIMEX', 'CIECH', 'COMARCH', 'DOMDEV', 'ECHO',
+        'EUROCASH', 'FAMUR', 'FORTE', 'GETIN', 'GTC', 'HANDLOWY', 'INGBSK', 'INTERCARS',
+        'KETY', 'DEVELIA', 'MILLENNIUM', 'STALPROD', 'NEUCA', 'VRG', 'KERNEL', 'GRUPAAZOTY',
+        'ENEA', 'BOGDANKA', 'ASSECOSEE', 'MABION', '11BIT', 'GPW', 'BENEFIT', 'KRUK', 'PKPCARGO',
+        'ENERGA', 'LIVECHAT', 'WIRTUALNA', 'BNPPPL', 'CLNPHARMA', 'PLAYWAY', 'TSGAMES']
+
+s80 = ['ABPL', 'AGORA', 'AMBRA', 'APATOR', 'ASTARTA', 'ATMGRUPA', 'BIOTON', 'BORYSZEW', 'BOS',
+       'COMP', 'DEBICA', 'INSTALKRK', 'KOGENERA', 'KRUSZWICA', 'LENTEX', 'MCI', 'MENNICA', 'NETIA',
+       'PEP', 'POLICE', 'POLIMEXMS', 'RAFAKO', 'SANOK', 'SNIEZKA', 'STALEXP', 'TIM', 'WAWEL', 'MANGATA',
+       'OPONEO.PL', 'RAINBOW', 'ASBIS', 'ASSECOBS', 'CIGAMES', 'WIELTON', 'TRAKCJA', 'UNIBEP',
+       'BAHOLDING', 'QUERCUS', 'PGSSOFT', 'MIRBUD', 'EKOEXPORT', 'ARCTIC', 'FERRO', 'SERINUS',
+       'VOTUM', 'IMCOMPANY', 'OVOSTAR', 'RYVU', 'ACAUTOGAZ', 'TOYA', 'VOXEL', 'MEDICALG', 'ELEMENTAL',
+       'DATAWALK', 'UNIMOT', 'ZEPAK', 'INTERAOLT', 'PHN', 'MLPGROUP', 'MERCATOR', 'NEWAG', 'CPGROUP',
+       'PCCROKITA', 'TORPOL', 'ALUMETAL', 'VIGOSYS', 'IDEABANK', 'ATAL', 'PEKABEX', 'PRAIRIE', 'ENTER',
+       'ARCHICOM', 'PBKM', 'AUTOPARTN', 'R22', 'OAT', 'ULTGAMES', 'MLSYSTEM', 'BOOMBIT', 'SELVITA']
+index = ["WIG20", "MWIG40", "SWIG80", "WIG"]
+
+sector = ["WIG-MOTO", "WIG-SPOZYW", "WIG-ODZIEZ", "WIG-BUDOW", "WIG-MEDIA", "WIG-GORNIC",
+          "WIG-ENERG", "WIG-BANKI", "WIG-NRCHOM", "WIG-CHEMIA", "WIG-CEE", "WIG-TELKOM", "WIG-LEKI",
+          "WIG-DEWEL", "WIG-SUROWC", "WIG-PALIWA"]
+
+# dictionary of lists
+wse = dict(w20_stocks=w20, mw40_stocks=mw40, sw80_stocks=s80, indexes=index, sectors_indexes=sector)
+
+
+def data_downloader(mktdata, start="2010-01-01", end="2020-06-01"):
+    # data_downloader function is getting data from quandl service
+    # and updating them to the last working day
+    # function also checking existence of directory
+    # and if necessary create one
+    for key, elements in mktdata.items():
+        for element in elements:
+            ticker = element.replace(".", "_")
+            what_index = str(key)
+            market = "WSE"
+            symbol = f"{market}/{ticker}"
+            path = os.path.join(data_path, f"{what_index}/{ticker}.csv")
+            cdir = os.path.join(data_path, f"{what_index}")
+            try:
+                pd.read_csv(path)
+            except FileNotFoundError:
+                print("There is no such data like", element, "downloading data")
+                data = quandl.get(symbol, start_date=start, end_date=end)
+                print("Data downloaded")
+                isDir = os.path.isdir(path)
+                # check if directory for file exist, if not create one
+                if not isDir:
+                    os.makedirs(cdir, exist_ok=True)
+                data.to_csv(path)
+            finally:
+                df_last = pd.read_csv(path)
+                last_date_of_stock = df_last.iloc[-1]["Date"]
+                today = datetime.today()
+                week = today.weekday()
+                if week > 4:
+                    shift = week - 4
+                    last_working_day = today - timedelta(days=shift)
+                    last_working_day = str(datetime.date(last_working_day))
+                else:
+                    last_working_day = str(datetime.date(today))
+                # last check if data in each file is actual
+                if last_working_day == last_date_of_stock:
+                    print(f"{element} is already updated")
+                else:
+                    # before price update, set up starting date as a one day shift forward from last date from file
+                    last_date_of_stock = datetime.strptime(df_last.iloc[-1]["Date"], "%Y-%m-%d") + timedelta(days=1)
+                    start_date = str(last_date_of_stock.date())
+                    print(element, "is outdated", "downloading additional data")
+                    # if data is outdated download and update existing file
+                    data_update = quandl.get(symbol, start_date=start_date, end_date=last_working_day)
+                    data_update.to_csv(path, mode='a', header=False)
+                    print("Update completed")
+
+
+if __name__ == "__main__":
+    data_downloader(mktdata=wse)
+    print("Database is updated")
