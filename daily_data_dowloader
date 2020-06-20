@@ -1,0 +1,26 @@
+import requests
+import pandas as pd
+
+start_date = "2010-01-01"
+end_date = "2020-06-19"
+
+
+portfolio_symbols = pd.read_csv('symbol_ticker.csv')
+# file should have column with tickers you want to download
+
+def data_download(data=portfolio_symbols):
+    for ticker in data.ticker:
+        dir = "../../Market_Data/"
+        f_sd = start_date.replace("-", "")
+        f_ed = end_date.replace("-", "")
+        download_url = f'https://stooq.com//q/d/l/?s={ticker}&d1={f_sd}&d2={f_ed}&i=d'
+        req = requests.get(download_url)
+        url_content = req.content
+        csv_file = open(f'{dir}{ticker}.csv', 'wb')
+        csv_file.write(url_content)
+        csv_file.close()
+        print(f'{ticker} downloaded')
+
+
+if __name__ == '__main__':
+    data_download(portfolio_symbols)
